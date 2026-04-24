@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { authAPI } from '../services/api'
 
 function Login() {
   const navigate = useNavigate()
@@ -8,17 +9,32 @@ function Login() {
     password: ''
   })
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    // TODO: Connect to backend API
-    console.log('Login:', formData)
-    // For demo, redirect to dashboard
-    navigate('/dashboard')
+    setLoading(true)
+    setError('')
+    
+    try {
+      const result = await authAPI.login(formData)
+      
+      if (result.token) {
+        localStorage.setItem('token', result.token)
+        localStorage.setItem('user', JSON.stringify(result.user))
+        navigate('/dashboard')
+      } else {
+        setError(result.message || 'Login failed')
+      }
+    } catch (err) {
+      setError('An error occurred. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -56,7 +72,9 @@ function Login() {
             />
           </div>
 
-          <button type="submit" className="btn btn-primary btn-full">Sign In</button>
+          <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
+            {loading ? 'Signing in...' : 'Sign In'}
+          </button>
         </form>
 
         <p className="auth-switch">

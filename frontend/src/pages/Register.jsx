@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { authAPI } from '../services/api'
 
 function Register() {
   const navigate = useNavigate()
@@ -10,12 +11,13 @@ function Register() {
     confirmPassword: ''
   })
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     
     if (formData.password !== formData.confirmPassword) {
@@ -23,10 +25,28 @@ function Register() {
       return
     }
     
-    // TODO: Connect to backend API
-    console.log('Register:', formData)
-    // For demo, redirect to dashboard
-    navigate('/dashboard')
+    setLoading(true)
+    setError('')
+    
+    try {
+      const result = await authAPI.register({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password
+      })
+      
+      if (result.token) {
+        localStorage.setItem('token', result.token)
+        localStorage.setItem('user', JSON.stringify(result.user))
+        navigate('/dashboard')
+      } else {
+        setError(result.message || 'Registration failed')
+      }
+    } catch (err) {
+      setError('An error occurred. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -90,7 +110,9 @@ function Register() {
             />
           </div>
 
-          <button type="submit" className="btn btn-primary btn-full">Create Account</button>
+          <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
+            {loading ? 'Creating account...' : 'Create Account'}
+          </button>
         </form>
 
         <p className="auth-switch">

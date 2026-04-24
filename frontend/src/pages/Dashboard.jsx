@@ -1,38 +1,86 @@
+import { useState, useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { subjectsAPI, tasksAPI, studyPlansAPI } from '../services/api'
+
 function Dashboard() {
-  // TODO: Connect to backend API for real data
-  const stats = {
-    subjects: 5,
-    pendingTasks: 8,
-    completedTasks: 12,
-    studyHours: 24
+  const navigate = useNavigate()
+  const [stats, setStats] = useState({
+    subjects: 0,
+    pendingTasks: 0,
+    completedTasks: 0,
+    studyHours: 0
+  })
+  const [recentTasks, setRecentTasks] = useState([])
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [])
+
+  const loadDashboardData = async () => {
+    try {
+      const userData = localStorage.getItem('user')
+      if (userData) {
+        setUser(JSON.parse(userData))
+      }
+
+      // Load all data in parallel
+      const [subjects, tasks, plans] = await Promise.all([
+        subjectsAPI.getAll().catch(() => []),
+        tasksAPI.getAll().catch(() => []),
+        studyPlansAPI.getAll().catch(() => [])
+      ])
+
+      // Calculate stats
+      const pendingTasks = tasks.filter(t => t.status === 'pending' || t.status === 'in-progress').length
+      const completedTasks = tasks.filter(t => t.status === 'completed').length
+
+      setStats({
+        subjects: subjects.length,
+        pendingTasks,
+        completedTasks,
+        studyHours: plans.filter(p => p.completed).length
+      })
+
+      // Get upcoming tasks (next 7 days)
+      const upcomingTasks = tasks
+        .filter(t => t.status !== 'completed' && t.deadline)
+        .sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
+        .slice(0, 5)
+
+      setRecentTasks(upcomingTasks)
+    } catch (error) {
+      console.error('Error loading dashboard:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const recentTasks = [
-    { id: 1, title: 'Database Systems Quiz', subject: 'CS 201', dueDate: 'April 26', priority: 'High' },
-    { id: 2, title: 'Math Assignment 5', subject: 'MATH 101', dueDate: 'April 27', priority: 'Medium' },
-    { id: 3, title: 'Physics Lab Report', subject: 'PHYS 101', dueDate: 'April 28', priority: 'Low' }
-  ]
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    navigate('/login')
+  }
 
   return (
     <div className="dashboard">
       <nav className="dashboard-nav">
-        <div className="logo">StudySync AI</div>
+        <Link to="/dashboard" className="logo">StudySync AI</Link>
         <div className="nav-links">
-          <a href="#" className="active">Dashboard</a>
-          <a href="#">Subjects</a>
-          <a href="#">Tasks</a>
-          <a href="#">Planner</a>
-          <a href="#">Timer</a>
-          <a href="#">Notes</a>
+          <Link to="/dashboard" className="active">Dashboard</Link>
+          <Link to="/subjects">Subjects</Link>
+          <Link to="/tasks">Tasks</Link>
+          <Link to="/planner">Planner</Link>
         </div>
         <div className="user-menu">
-          <span>John Doe</span>
-          <button className="btn btn-outline">Logout</button>
+          <span>{user?.name || 'Student'}</span>
+          <button onClick={handleLogout} className="btn btn-outline">Logout</button>
         </div>
       </nav>
 
       <main className="dashboard-content">
-        <h1>Welcome back, John! 👋</h1>
+        <h1>Welcome back, {user?.name || 'Student'}! 👋</h1>
         <p className="subtitle">Here's your academic overview</p>
 
         <div className="stats-grid">
@@ -49,36 +97,50 @@ function Dashboard() {
             <p className="stat-value">{stats.completedTasks}</p>
           </div>
           <div className="stat-card">
-            <h3>Study Hours</h3>
+            <h3>Study Sessions</h3>
             <p className="stat-value">{stats.studyHours}h</p>
           </div>
         </div>
 
         <div className="dashboard-sections">
           <section className="card">
-            <h2>Pending Assignments</h2>
-            <div className="task-list">
-              {recentTasks.map(task => (
-                <div key={task.id} className="task-item">
-                  <div className="task-info">
-                    <h4>{task.title}</h4>
-                    <p>{task.subject} • Due {task.dueDate}</p>
+            <h2>Upcoming Deadlines</h2>
+            {loading ? (
+              <p>Loading...</p>
+            ) : recentTasks.length === 0 ? (
+              <div className="empty-state">
+                <p>No upcoming tasks. Add some tasks to get started!</p>
+              </div>
+            ) : (
+              <div className="task-list">
+                {recentTasks.map(task => (
+                  <div key={task._id} className="task-item">
+                    <div className="task-info">
+                      <h4>{task.title}</h4>
+                      <p>
+                        {task.subject?.name || 'No subject'} • 
+                        Due {task.deadline ? new Date(task.deadline).toLocaleDateString() : 'No deadline'}
+                      </p>
+                    </div>
+                    <span className={`priority priority-${task.priority}`}>
+                      {task.priority}
+                    </span>
                   </div>
-                  <span className={`priority priority-${task.priority.toLowerCase()}`}>
-                    {task.priority}
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
+            <Link to="/tasks" className="btn btn-outline" style={{ marginTop: '1rem' }}>
+              View All Tasks →
+            </Link>
           </section>
 
           <section className="card">
             <h2>Quick Actions</h2>
             <div className="quick-actions">
-              <button className="action-btn">+ Add Task</button>
-              <button className="action-btn">+ Add Subject</button>
-              <button className="action-btn">⏱️ Start Focus</button>
-              <button className="action-btn">📝 Add Note</button>
+              <Link to="/subjects" className="action-btn">+ Add Subject</Link>
+              <Link to="/tasks" className="action-btn">+ Add Task</Link>
+              <Link to="/planner" className="action-btn">📅 Plan Study</Link>
+              <Link to="/tasks" className="action-btn">📝 View Tasks</Link>
             </div>
           </section>
         </div>
